@@ -6,14 +6,42 @@ using System.Diagnostics;
 using System.IO;
 using System.Linq;
 using System.Reflection;
+using System.Runtime.Remoting;
 using System.Text;
 using System.Threading.Tasks;
 
 namespace csi
 {
-    class Compiler
+    public class Compiler : MarshalByRefObject, IDisposable
     {
-        public AssemblyContainer Build(
+        public override object InitializeLifetimeService() { return null; }
+
+
+        #region IDisposable
+        private bool _disposed;
+        ~Compiler()
+        {
+            Dispose(false);
+        }
+        public void Dispose()
+        {
+            Dispose(true);
+        }
+        protected void Dispose(bool disposing)
+        {
+            if (_disposed) return;
+
+            lock (this)
+            {
+                RemotingServices.Disconnect(this);
+                GC.SuppressFinalize(this);
+                _disposed = true;
+            }
+        }
+        #endregion
+
+
+        public AssemblyContainer Compile(
             string filename,
             List<string> defineList, int warningLevel,
             List<string> requireDirList, List<string> libraryList)
@@ -72,10 +100,15 @@ namespace csi
                         error.ErrorNumber, error.ErrorText,
                         Path.GetFileName(error.FileName), error.Line));
                 }
-                return null;
+                return new AssemblyContainer(
+                    null, null,
+                    target.SourceFileList, addedReferences);
             }
 
-            return new AssemblyContainer(param.OutputAssembly, result.CompiledAssembly, addedReferences);
+            return new AssemblyContainer(
+                param.OutputAssembly,
+                result.CompiledAssembly,
+                target.SourceFileList, addedReferences);
         }
     }
 }
